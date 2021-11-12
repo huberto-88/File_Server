@@ -1,0 +1,732 @@
+type: edu
+files:
+- name: src/server/Main.java
+  visible: true
+  text: "package server;\n\nimport java.io.DataInputStream;\nimport java.io.DataOutputStream;\n\
+    import java.io.IOException;\nimport java.net.ServerSocket;\nimport java.net.Socket;\n\
+    \npublic class Main {\n\n    private static final int PORT = 1030;\n\n    public\
+    \ static void main(String[] args) {\n        try (ServerSocket server = new ServerSocket(PORT))\
+    \ {\n            try (\n                    Socket socket = server.accept(); \t\
+    //accepting new client\n                    DataInputStream inputStream = new\
+    \ DataInputStream(socket.getInputStream());\n                    DataOutputStream\
+    \ output = new DataOutputStream(socket.getOutputStream());\n            ) {\n\
+    \                System.out.println(\"Server started!\");\n                String\
+    \ msg = inputStream.readUTF(); // reading message\n                System.out.println(\"\
+    Received: \" + msg);\n\n                String sent = \"All files were sent!\"\
+    ;\n                System.out.println(\"Sent: \" + sent);\n                output.writeUTF(sent);\t\
+    \t\t\t// read it to the client\n\n                inputStream.close();\n     \
+    \           output.close();\n            }\n        } catch (IOException e) {\n\
+    \            e.printStackTrace();\n        }\n    }\n}"
+  learner_created: false
+- name: src/client/Main.java
+  visible: true
+  text: "package client;\n\nimport java.io.DataInputStream;\nimport java.io.DataOutputStream;\n\
+    import java.io.IOException;\nimport java.net.Socket;\nimport java.util.Scanner;\n\
+    \npublic class Main {\n\n    private static final String SERVER_ADDRESS = \"127.0.0.1\"\
+    ;\n    private static final int SERVER_PORT = 1030;\n\n    public static void\
+    \ main(String[] args) {\n\n        try (\n                Socket socket = new\
+    \ Socket(SERVER_ADDRESS, SERVER_PORT);\n                DataInputStream inputStream\
+    \ = new DataInputStream(socket.getInputStream());\n                DataOutputStream\
+    \ outputStream = new DataOutputStream(socket.getOutputStream());\n        ) {\n\
+    \            Scanner scanner = new Scanner(System.in);\n            String msg\
+    \ = \"Give me everything you have!\";\n\n            outputStream.writeUTF(msg);\
+    \        \t\t\t\t// sending msg to server\n            System.out.println(\"Client\
+    \ started!\");\n            System.out.println(\"Sent: \" + msg);\n          \
+    \  String recivedMsg = inputStream.readUTF();\t\t//response message\n        \
+    \    System.out.println(\"Received: \" + recivedMsg);\n\n            inputStream.close();\n\
+    \            outputStream.close();\n            socket.close();\n        } catch\
+    \ (IOException e) {\n            e.printStackTrace();\n        }\n    }\n}\n"
+  learner_created: false
+- name: test/FileServerTest.java
+  visible: false
+  text: |+
+    import org.hyperskill.hstest.stage.StageTest;
+    import org.hyperskill.hstest.testcase.CheckResult;
+    import org.hyperskill.hstest.testcase.TestCase;
+    import org.hyperskill.hstest.testing.TestedProgram;
+    import org.junit.AfterClass;
+
+    import java.io.File;
+    import java.net.ConnectException;
+    import java.nio.file.Files;
+    import java.nio.file.Paths;
+    import java.util.List;
+
+    import static org.hyperskill.hstest.common.Utils.sleep;
+
+    public class FileServerTest extends StageTest<String> {
+
+        private static final String onConnectExceptionMessage = "A client can't connect to the server!\n" +
+            "Make sure the server handles connections and doesn't stop after one client connected.";
+
+        public static final String serverDataPath = System.getProperty("user.dir") +
+            File.separator + "src" + File.separator + "server" + File.separator + "data" + File.separator;
+
+        public static final String clientDataPath = System.getProperty("user.dir") +
+            File.separator + "src" + File.separator + "client" + File.separator + "data" + File.separator;
+
+        private static String id;
+
+        @Override
+        public List<TestCase<String>> generate() {
+            return List.of(
+                new TestCase<String>()
+                    .feedbackOnException(ConnectException.class, onConnectExceptionMessage)
+                    .setDynamicTesting(this::checkServerStop),
+                new TestCase<String>()
+                    .feedbackOnException(ConnectException.class, onConnectExceptionMessage)
+                    .setDynamicTesting(this::checkPaths),
+                new TestCase<String>()
+                    .feedbackOnException(ConnectException.class, onConnectExceptionMessage)
+                    .setDynamicTesting(this::testSaveAndGet),
+                new TestCase<String>()
+                    .feedbackOnException(ConnectException.class, onConnectExceptionMessage)
+                    .setDynamicTesting(this::testGetAfterServerRestart),
+                new TestCase<String>()
+                    .feedbackOnException(ConnectException.class, onConnectExceptionMessage)
+                    .setDynamicTesting(this::testDeleteFiles)
+            );
+        }
+
+        // Test #1. Check if server stops
+        CheckResult checkServerStop() {
+
+            TestedProgram server = getServer();
+            TestedProgram client;
+
+            server.startInBackground();
+
+            client = getClient();
+            client.start();
+            client.execute("exit");
+
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            if (!server.isFinished()) {
+                return CheckResult.wrong("You should stop the server if a client sends 'exit'");
+            }
+
+            return CheckResult.correct();
+        }
+
+        CheckResult checkPaths() {
+            // Test #2. Check folders with data
+            if (!Files.exists(Paths.get(serverDataPath)) || !Files.isDirectory(Paths.get(serverDataPath))) {
+                return CheckResult.wrong("Can't find '/server/data' folder. You should store all saved files in it!\n" +
+                    "The folder should be created even if the server wasn't started!");
+            }
+
+            if (!Files.exists(Paths.get(clientDataPath)) || !Files.isDirectory(Paths.get(clientDataPath))) {
+                return CheckResult.wrong("Can't find '/client/data' folder. You should store all files you want to " +
+                    "store on the server in it!\n" +
+                    "The folder should be created even if the client wasn't started!");
+            }
+            return CheckResult.correct();
+        }
+
+
+        CheckResult testSaveAndGet() {
+
+            TestedProgram server;
+            TestedProgram client;
+
+            Utils.createFiles(clientDataPath);
+
+            // Test #3. Check saving file on the server
+            server = getServer();
+            server.startInBackground();
+
+            File folder = new File(serverDataPath);
+            int numOfFilesBeforeAdding = Utils.numExistingFiles(folder);
+
+            client = getClient();
+            client.start();
+            client.execute("2\ntest_purpose_test1.txt");
+            String clientOutput = client.execute("");
+
+            if (!clientOutput.contains("Response says that file is saved! ID =")) {
+                return CheckResult.wrong("After saving a file on the server you should print:\n" +
+                    "Response says that file is saved! ID = **, where ** is an id of the file!");
+            }
+
+            id = Utils.findId(clientOutput);
+
+            int numOfFilesAfterAdding = Utils.numExistingFiles(folder);
+
+            if (numOfFilesAfterAdding == numOfFilesBeforeAdding) {
+                return CheckResult.wrong("Once a client saved a file on the server number of files in /server/data/ should be changed!");
+            }
+
+            client = getClient();
+            client.start();
+            clientOutput = client.execute("2\ntest_purpose_test2.txt\ntest_purpose_newFile.txt");
+
+            if (!clientOutput.contains("Response says that file is saved! ID =")) {
+                return CheckResult.wrong("After saving a file on the server you should print:\n" +
+                    "Response says that file is saved! ID = **, where ** is an id of the file!");
+            }
+
+            if (!Utils.isServerFileExists("test_purpose_newFile.txt")) {
+                return CheckResult.wrong("Can't find a file after saving on the server." +
+                    "You should save client's files in /server/data/ folder!");
+            }
+
+            String savedFileContent = Utils.getServerFileContent("test_purpose_newFile.txt");
+
+            if (!savedFileContent.equals("test2")) {
+                return CheckResult.wrong("A file after saving has wrong content!");
+            }
+
+            // Test #4. Check getting files
+            client = getClient();
+            client.start();
+            clientOutput = client.execute("1\n1\ntest_purpose_notExist.txt");
+
+            if (!clientOutput.contains("The response says that this file is not found!")) {
+                return CheckResult.wrong("When client tries to get a file by name that doesn't exist you should print:\n" +
+                    "\"The response says that this file is not found!\"");
+            }
+
+            client = getClient();
+            client.start();
+            clientOutput = client.execute("1\n2\n" + (id + "511"));
+
+            if (!clientOutput.contains("The response says that this file is not found!")) {
+                return CheckResult.wrong("When client tries to get a file by ID that doesn't exist you should print:\n" +
+                    "\"The response says that this file is not found!\"");
+            }
+
+            client = getClient();
+            client.start();
+            client.execute("1\n1\ntest_purpose_newFile.txt\ntest_purpose_get.txt");
+
+            if (!Utils.isClientFileExists("test_purpose_get.txt")) {
+                return CheckResult.wrong("Can't find a file after getting it from the server by name.\n" +
+                    "You should store all downloaded files from the server in /client/data/ folder.");
+            }
+
+            String downloadedByNameFileContent = Utils.getClientFileContent("test_purpose_get.txt");
+            if (!downloadedByNameFileContent.equals("test2")) {
+                return CheckResult.wrong("After getting a file from the server by name it has wrong content!");
+            }
+
+            client = getClient();
+            client.start();
+            client.execute("1\n2\n" + id + "\ntest_purpose_get_id.txt");
+
+            if (!Utils.isClientFileExists("test_purpose_get_id.txt")) {
+                return CheckResult.wrong("Can't find a file after getting it from the server by ID.\n" +
+                    "You should store all downloaded files from the server in /client/data/ folder.");
+            }
+
+            String downloadedByIdFileContent = Utils.getClientFileContent("test_purpose_get_id.txt");
+            if (!downloadedByIdFileContent.equals("test1")) {
+                return CheckResult.wrong("After getting a file from the server by ID it has wrong content!");
+            }
+
+            client = getClient();
+            client.start();
+            client.execute("exit");
+
+            return CheckResult.correct();
+        }
+
+        CheckResult testGetAfterServerRestart() {
+
+            TestedProgram server = getServer();
+            TestedProgram client = getClient();
+
+            server.startInBackground();
+            client.start();
+            client.execute("1\n1\ntest_purpose_newFile.txt\ntest_purpose_get_after_restart.txt");
+
+            if (!Utils.isClientFileExists("test_purpose_get_after_restart.txt")) {
+                return CheckResult.wrong("Can't find a file after getting it from the server by name.\n" +
+                    "Looks like your server lose all stored files after restart.\n" +
+                    "You should store all downloaded files from the server in /client/data/ folder.");
+            }
+
+            client = getClient();
+            client.start();
+            client.execute("1\n2\n" + id + "\ntest_purpose_get_by_id_after_restart.txt");
+
+            if (!Utils.isClientFileExists("test_purpose_get_by_id_after_restart.txt")) {
+                return CheckResult.wrong("Can't find a file after getting it from the server by ID.\n" +
+                    "Looks like your server lose all stored files after restart.\n" +
+                    "You should store all downloaded files from the server in /client/data/ folder.");
+            }
+
+            client = getClient();
+            client.start();
+            client.execute("exit");
+
+            return CheckResult.correct();
+        }
+
+        CheckResult testDeleteFiles() {
+
+            TestedProgram server = getServer();
+            TestedProgram client = getClient();
+
+            File folder = new File(serverDataPath);
+            int numOfFilesBeforeDeleting = Utils.numExistingFiles(folder);
+
+            server.startInBackground();
+            client.start();
+            client.execute("3\n1\ntest_purpose_newFile.txt");
+
+            sleep(2000);
+            int numOfFilesAfterDeletingByName = Utils.numExistingFiles(folder);
+            if (numOfFilesBeforeDeleting == numOfFilesAfterDeletingByName) {
+                return CheckResult.wrong("Once a client deleted a file by name from the server, " +
+                    "number of files in /server/data/ should be fewer!");
+            }
+
+            client = getClient();
+            client.start();
+            client.execute("3\n2\n" + id);
+
+            sleep(2000);
+            int numOfFilesAfterDeletingById = Utils.numExistingFiles(folder);
+            if (numOfFilesAfterDeletingByName == numOfFilesAfterDeletingById) {
+                return CheckResult.wrong("Once a client deleted a file by ID from the server, " +
+                    "number of files in /server/data/ should be fewer!");
+            }
+
+            client = getClient();
+            client.start();
+            client.execute("exit");
+
+            return CheckResult.correct();
+        }
+
+
+        @AfterClass
+        public static void afterTestDeleteFiles() {
+            Utils.deleteTestFiles();
+        }
+
+        public static TestedProgram getClient() {
+            return new TestedProgram("client");
+        }
+
+        public static TestedProgram getServer() {
+            return new TestedProgram("server");
+        }
+    }
+
+
+  learner_created: false
+- name: src/server/controllers/Request.java
+  visible: true
+  text: |
+    package server.controllers;
+
+    public interface Request {
+        String executeRequest();
+    }
+  learner_created: true
+- name: src/client/Client.java
+  visible: true
+  text: |
+    package client;
+
+    import java.io.DataInputStream;
+    import java.io.DataOutputStream;
+    import java.io.IOException;
+    import java.net.Socket;
+    import java.util.Scanner;
+
+
+    public class Client {
+        private final String SERVER_ADDRESS;
+        private final int SERVER_PORT;
+        private final Scanner scanner = new Scanner(System.in);
+
+
+        public Client(String SERVER_ADDRESS, int SERVER_PORT) {
+            this.SERVER_ADDRESS = SERVER_ADDRESS;
+            this.SERVER_PORT = SERVER_PORT;
+        }
+
+        public void run() {
+            try (
+                    Socket socket = new Socket(SERVER_ADDRESS, SERVER_PORT);
+                    DataInputStream inputStream = new DataInputStream(socket.getInputStream());
+                    DataOutputStream outputStream = new DataOutputStream(socket.getOutputStream())
+            ) {
+                    String request = requestMenu();
+                    System.out.println("The request was sent.");
+                    outputStream.writeUTF(request);
+                   if (request.equals("exit")) {
+                       socket.close();
+                   } else {
+                       String response = inputStream.readUTF();
+                       System.out.println(response);
+                   }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+
+        private String requestMenu() {
+            System.out.println("Enter action (1 - get a file, 2 - create a file, 3 - delete a file):");
+            String request = scanner.nextLine().strip();
+            if (request.equals("exit")) {
+                return "exit";
+            }
+            System.out.println("Enter filename:");
+            String fileName = scanner.nextLine();
+
+            switch (request) {
+                case "1":
+                    return get() + " " + fileName;
+                case "2":
+                    return "create " + fileName + " " + create();
+                case "3":
+                    return delete() + " " + fileName;
+            }
+            return "exit";
+        }
+
+        private String get() {
+            return "get";
+        }
+
+        private String create() {
+            System.out.println("Enter file content:");
+            return scanner.nextLine();
+        }
+
+        private String delete() {
+            return "delete";
+        }
+    }
+  learner_created: true
+- name: src/server/controllers/User.java
+  visible: true
+  text: |
+    package server.controllers;
+
+    import java.io.File;
+    import java.io.FileNotFoundException;
+    import java.io.FileWriter;
+    import java.io.IOException;
+    import java.util.Scanner;
+
+    public class User {
+        private File file;
+        private String path = "C:\\Users\\Hubert\\IdeaProjects\\File Server\\File Server\\task\\src\\server\\data\\";
+        private StringBuilder fileContent;
+
+
+        public User(String fileName, String fileContent) {
+            this.file = new File(path + fileName);
+            this.fileContent = new StringBuilder(fileContent);
+        }
+
+        public User(String fileName) {
+            this(fileName, "");
+        }
+
+        public String get() {
+            if (file.exists()) {
+                try {
+                    Scanner scanner = new Scanner(file);
+                    while (scanner.hasNext()) {
+                        fileContent.append(scanner.nextLine());
+                    }
+                    scanner.close();
+                    return "The content of the file is: " + fileContent.toString();
+                } catch (FileNotFoundException ignored) {}
+            }
+            return "The response says that the file was not found!";
+        }
+
+        public String createFile() {
+            if (file.exists()) {
+                return "The response says that creating the file was forbidden!";
+            }
+            try (FileWriter fileWriter = new FileWriter(file)) {
+                fileWriter.write(fileContent.toString());
+                fileWriter.close();
+                return "The response says that file was created!";
+            } catch (IOException ioException) {
+                return "Fail! File not created! :(";
+            }
+        }
+
+        public String delete() {
+            if (this.file.exists()) {
+                if (this.file.delete()) {
+                    return "The response says that the file was successfully deleted!";
+                } else {
+                    return "File unluckily wasn't deleted...";
+                }
+            } else {
+                return "The response says that the file was not found!";
+            }
+        }
+    }
+  learner_created: true
+- name: src/server/controllers/Controller.java
+  visible: true
+  text: |
+    package server.controllers;
+
+    public class Controller {
+        private Request request;
+
+        public void setRequest(Request request) {
+            this.request = request;
+        }
+
+        public String executeRequest() {
+            return request.executeRequest();
+        }
+    }
+  learner_created: true
+- name: src/server/Server.java
+  visible: true
+  text: |
+    package server;
+
+    import server.controllers.*;
+
+    import java.io.DataInputStream;
+    import java.io.DataOutputStream;
+    import java.io.IOException;
+    import java.net.ServerSocket;
+    import java.net.Socket;
+    import java.util.Objects;
+
+    public class Server {
+        private final int PORT;
+        private Controller controller = new Controller();
+
+
+        public Server(int port) {
+            this.PORT = port;
+        }
+
+        public void run() {
+            try (ServerSocket server = new ServerSocket(PORT)) {
+                System.out.println("Server started!");
+                while (true) {
+                    try (
+                            Socket serverSocket = server.accept();    //accepting new client
+                            DataInputStream inputStream = new DataInputStream(serverSocket.getInputStream());
+                            DataOutputStream output = new DataOutputStream(serverSocket.getOutputStream())
+                    ) {
+                        String requestString = inputStream.readUTF();
+                        Request request = parseRequest(requestString);
+                        if (Objects.isNull(request)) {
+                            serverSocket.close();
+                            break;
+                        } else {
+                            controller.setRequest(request);
+                            output.writeUTF(controller.executeRequest());
+                        }
+                    }
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        private Request parseRequest(String requestString) {
+            String[] requestParsed = requestString.split("\\s+", 3);
+            switch (requestParsed[0]) {
+                case "get":
+                    return new GetRequest(new User(requestParsed[1]));
+                case "create":
+                    return new CreateFileRequest(new User(requestParsed[1], requestParsed[2]));
+                case "delete":
+                    return new DeleteRequest(new User(requestParsed[1]));
+                case "exit":
+                    break;
+            }
+            return null;
+        }
+
+    }
+  learner_created: true
+- name: src/server/controllers/GetRequest.java
+  visible: true
+  text: |
+    package server.controllers;
+
+    public class GetRequest implements Request {
+        private User user;
+
+        public GetRequest(User userRequest) {
+            this.user = userRequest;
+        }
+
+        @Override
+        public String executeRequest() {
+            return user.get();
+        }
+    }
+  learner_created: true
+- name: src/server/controllers/CreateFileRequest.java
+  visible: true
+  text: |
+    package server.controllers;
+
+    public class CreateFileRequest implements Request {
+        private User user;
+
+        public CreateFileRequest(User user) {
+            this.user = user;
+        }
+
+        @Override
+        public String executeRequest() {
+            return user.createFile();
+        }
+    }
+  learner_created: true
+- name: src/server/controllers/DeleteRequest.java
+  visible: true
+  text: |
+    package server.controllers;
+
+    public class DeleteRequest implements Request {
+        private User user;
+
+        public DeleteRequest(User user) {
+            this.user = user;
+        }
+
+        @Override
+        public String executeRequest() {
+            return user.delete();
+        }
+    }
+  learner_created: true
+- name: test/Utils.java
+  visible: false
+  text: |+
+    import org.hyperskill.hstest.exception.outcomes.WrongAnswer;
+
+    import java.io.File;
+    import java.io.FileWriter;
+    import java.io.IOException;
+    import java.nio.file.Files;
+    import java.nio.file.Paths;
+    import java.util.Arrays;
+    import java.util.Objects;
+    import java.util.regex.Matcher;
+    import java.util.regex.Pattern;
+
+    public class Utils {
+        public static String findId(String output) {
+            Pattern pattern = Pattern.compile("ID = (\\d+)");
+            Matcher matcher = pattern.matcher(output);
+
+            if (matcher.find()) {
+                int count = matcher.groupCount();
+                if (count != 1) {
+                    throw new WrongAnswer("Can't find ID of the file in the output!\nMake sure you print ID like in examples!");
+                }
+                return matcher.group(1);
+            } else {
+                throw new WrongAnswer("Can't find ID of the file in the output!\nMake sure you print ID like in examples!");
+            }
+        }
+
+        public static void deleteTestFiles() {
+            File dir = new File(FileServerTest.serverDataPath);
+
+            File[] files = dir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.getName().startsWith("test_purpose_")) {
+                        boolean isDeleted = file.delete();
+                        if (!isDeleted) {
+                            throw new WrongAnswer("Can't delete test files. Maybe they are not closed!");
+                        }
+                    }
+                }
+            }
+
+            File cdir = new File(FileServerTest.clientDataPath);
+            files = cdir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.getName().startsWith("test_purpose_")) {
+                        boolean isDeleted = file.delete();
+                        if (!isDeleted) {
+                            throw new WrongAnswer("Can't delete test files. Maybe their input streams are not closed!");
+                        }
+                    }
+                }
+            }
+        }
+
+        public static void createFiles(String clientDataPath) {
+
+            for (int i = 0; i < 2; i++) {
+                try {
+                    File file = new File(clientDataPath + String.format("test_purpose_test%d.txt", i + 1));
+                    if (!file.exists()) file.createNewFile();
+                    FileWriter writer = new FileWriter(file, false);
+                    writer.write(String.format("test%d", i + 1));
+                    writer.close();
+                } catch (IOException e) {
+                    throw new RuntimeException("Can't create test files!");
+                }
+
+            }
+        }
+
+        public static int numExistingFiles(File file) {
+            File[] files = file.listFiles();
+            if (files == null) {
+                return 0;
+            }
+            return (int) Arrays.stream(files).filter(File::exists).count();
+        }
+
+        private static boolean isFileExists(String path) {
+            return Files.exists(Paths.get(path)) && !Files.isDirectory(Paths.get(path));
+        }
+
+        public static boolean isClientFileExists(String fileName) {
+            return isFileExists(FileServerTest.clientDataPath + fileName);
+        }
+
+        public static boolean isServerFileExists(String fileName) {
+            return isFileExists(FileServerTest.serverDataPath + fileName);
+        }
+
+        public static String getServerFileContent(String fileName) {
+            return getFileContent(FileServerTest.serverDataPath + fileName);
+        }
+
+        public static String getClientFileContent(String fileName) {
+            return getFileContent(FileServerTest.clientDataPath + fileName);
+        }
+
+        private static String getFileContent(String fileName) {
+            try {
+                return new String(Files.readAllBytes(Paths.get(fileName)));
+            } catch (IOException e) {
+            }
+            throw new WrongAnswer("Can't read files content.\n" +
+                "Make sure you close input/output streams after reading or writing files!");
+        }
+
+    }
+
+
+  learner_created: false
+feedback_link: https://hyperskill.org/projects/52/stages/286/implement#comment
+status: Unchecked
+record: -1
