@@ -123,11 +123,12 @@ public class Client {
     private void delete(DataInputStream inputStream, DataOutputStream outputStream) {
         System.out.println("Do you want to delete the file by name or by id (1 - name, 2 - id):");
         int chosen = Integer.parseInt(scanner.nextLine());
-        System.out.printf("Enter %s:\n", chosen == 1 ? "name" : "id");
+        String type = "name ";
+        if (chosen == 2) type = "id ";
         String idOrName = scanner.nextLine();
 
         try {
-            outputStream.writeUTF("delete " + idOrName);
+            outputStream.writeUTF("delete " + type + idOrName);
             System.out.println("The request was sent.");
             String response = inputStream.readUTF();
             if (response.equals("200")) {

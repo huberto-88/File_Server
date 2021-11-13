@@ -17,9 +17,10 @@ public class User {
         String[] requestParsed = requestString.split("\\s+", 3);
         if (requestParsed[1].equals("name")) {
             this.file = new File(path + requestParsed[2]);
-        } else if (requestParsed[1].equals("id")) {
+        } else if (requestParsed[1].equals("id")
+        || requestParsed[1].equals("delete")) {
             this.file = new File(path + indexesMap.getOrDefault(Integer.parseInt(requestParsed[2]),
-                    "idNotExists88"));
+                    "idNotExists404"));
         }
     }
 
@@ -73,6 +74,8 @@ public class User {
     }
 
     public void delete(DataInputStream inputStream, DataOutputStream output) {
+        System.out.println();
+        System.out.println("--- " + file.getName());
         if (this.file.exists()) {
             if (this.file.delete()) {
                 try {
@@ -80,12 +83,12 @@ public class User {
                 } catch (IOException e) {
                     e.printStackTrace();
                 }
-            } else {
-                try {
-                    output.writeUTF("404");
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
+            }
+        } else {
+            try {
+                output.writeUTF("404");
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
     }
