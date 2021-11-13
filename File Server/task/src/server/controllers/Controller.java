@@ -1,5 +1,8 @@
 package server.controllers;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+
 public class Controller {
     private Request request;
 
@@ -7,7 +10,7 @@ public class Controller {
         this.request = request;
     }
 
-    public String executeRequest() {
-        return request.executeRequest();
+    public void executeRequest(DataInputStream inputStream, DataOutputStream output) {
+        request.executeRequest(inputStream, output);
     }
 }

@@ -727,6 +727,36 @@ files:
 
 
   learner_created: false
+- name: src/client/data/test.txt
+  visible: true
+  learner_created: true
+- name: src/indexes
+  visible: true
+  learner_created: true
 feedback_link: https://hyperskill.org/projects/52/stages/286/implement#comment
-status: Unchecked
+status: Failed
+feedback:
+  message: "Wrong answer in test #5\n\nOnce a client deleted a file by name from the\
+    \ server, number of files in /server/data/ should be fewer!\n\nPlease find below\
+    \ the output of your program during this failed test.\nNote that the &#39;&gt;&#39;\
+    \ character indicates the beginning of the input line.\n\n---\n\nstdout:\nServer\
+    \ started!\nEnter action (1 - get a file, 2 - save a file, 3 - delete a file):\n\
+    &gt; 3\nDo you want to delete the file by name or by id (1 - name, 2 - id):\n\
+    &gt; 1\nEnter name:\n&gt; test_purpose_newFile.txt\ndelete test_purpose_newFile.txt\n\
+    The request was sent.\nThe request was sent.\n\nstderr:\njava.io.EOFException\n\
+    \tat java.base/java.io.DataInputStream.readUnsignedShort(DataInputStream.java:345)\n\
+    \tat java.base/java.io.DataInputStream.readUTF(DataInputStream.java:594)\n\tat\
+    \ java.base/java.io.DataInputStream.readUTF(DataInputStream.java:569)\n\tat client.Client.delete(Client.java:132)\n\
+    \tat client.Client.run(Client.java:42)\n\tat client.Main.main(Main.java:6)\n\t\
+    at java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke0(Native Method)\n\
+    \tat java.base/jdk.internal.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:62)\n\
+    \tat java.base/jdk.internal.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)\n\
+    \tat java.base/java.lang.reflect.Method.invoke(Method.java:566)\n\tat org.hyperskill.hstest.testing.execution.MainMethodExecutor.invokeMain(MainMethodExecutor.java:172)\n\
+    \tat org.hyperskill.hstest.testing.execution.MainMethodExecutor.lambda$launch$0(MainMethodExecutor.java:199)\n\
+    \tat java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:515)\n\
+    \tat java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)\n\tat\
+    \ java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1128)\n\
+    \tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:628)\n\
+    \tat java.base/java.lang.Thread.run(Thread.java:829)"
+  time: Sat, 13 Nov 2021 09:03:39 UTC
 record: -1

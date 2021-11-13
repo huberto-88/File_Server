@@ -1,5 +1,8 @@
 package server.controllers;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+
 public interface Request {
-    String executeRequest();
+    void executeRequest(DataInputStream inputStream, DataOutputStream output);
 }

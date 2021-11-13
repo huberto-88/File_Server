@@ -1,5 +1,8 @@
 package server.controllers;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+
 public class CreateFileRequest implements Request {
     private User user;
 
@@ -8,7 +11,7 @@ public class CreateFileRequest implements Request {
     }
 
     @Override
-    public String executeRequest() {
-        return user.createFile();
+    public void executeRequest(DataInputStream inputStream, DataOutputStream output) {
+         user.createFile(inputStream, output);
     }
 }

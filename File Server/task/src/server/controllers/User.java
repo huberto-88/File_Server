@@ -1,62 +1,125 @@
 package server.controllers;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.Scanner;
+import java.io.*;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class User {
     private File file;
     private String path = "C:\\Users\\Hubert\\IdeaProjects\\File Server\\File Server\\task\\src\\server\\data\\";
-    private StringBuilder fileContent;
+    private ConcurrentMap<Integer, String> indexesMap;
+    private String pathToMap = "C:\\Users\\Hubert\\IdeaProjects\\File Server\\File Server\\task\\src\\indexes";
 
+    public User(String requestString) {
+        readIndexMap();
 
-    public User(String fileName, String fileContent) {
-        this.file = new File(path + fileName);
-        this.fileContent = new StringBuilder(fileContent);
+        String[] requestParsed = requestString.split("\\s+", 3);
+        if (requestParsed[1].equals("name")) {
+            this.file = new File(path + requestParsed[2]);
+        } else if (requestParsed[1].equals("id")) {
+            this.file = new File(path + indexesMap.getOrDefault(Integer.parseInt(requestParsed[2]),
+                    "idNotExists88"));
+        }
     }
 
-    public User(String fileName) {
-        this(fileName, "");
-    }
-
-    public String get() {
+    public void get(DataInputStream inputStream, DataOutputStream output) {
         if (file.exists()) {
             try {
-                Scanner scanner = new Scanner(file);
-                while (scanner.hasNext()) {
-                    fileContent.append(scanner.nextLine());
-                }
-                scanner.close();
-                return "The content of the file is: " + fileContent.toString();
-            } catch (FileNotFoundException ignored) {}
-        }
-        return "The response says that the file was not found!";
-    }
+                output.writeUTF("200");
+                output.writeInt((int) file.length());
 
-    public String createFile() {
-        if (file.exists()) {
-            return "The response says that creating the file was forbidden!";
-        }
-        try (FileWriter fileWriter = new FileWriter(file)) {
-            fileWriter.write(fileContent.toString());
-            fileWriter.close();
-            return "The response says that file was created!";
-        } catch (IOException ioException) {
-            return "Fail! File not created! :(";
-        }
-    }
-
-    public String delete() {
-        if (this.file.exists()) {
-            if (this.file.delete()) {
-                return "The response says that the file was successfully deleted!";
-            } else {
-                return "File unluckily wasn't deleted...";
+                byte[] bytes = new byte[(int) file.length()];
+                FileInputStream fis = new FileInputStream(file);
+                BufferedInputStream bis = new BufferedInputStream(fis);
+                bis.read(bytes, 0, (int) file.length());
+                output.write(bytes, 0, (int) file.length());
+                output.flush();
+                saveIndexMap();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         } else {
-            return "The response says that the file was not found!";
+            try {
+                output.writeUTF("404");
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void createFile(DataInputStream inputStream, DataOutputStream output) {
+        try {
+            int length = inputStream.readInt();
+            int id = new Random().nextInt(10000);
+            byte[] bytes = new byte[length];
+
+            FileOutputStream fos = new FileOutputStream(file);
+            BufferedOutputStream bos = new BufferedOutputStream(fos);
+            inputStream.readFully(bytes, 0, length);
+
+            bos.write(bytes, 0, length);
+            bos.flush();
+
+            indexesMap.put(id, file.getName());
+            output.writeUTF("200 " + id);
+
+            saveIndexMap();
+            bos.close();
+            fos.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void delete(DataInputStream inputStream, DataOutputStream output) {
+        if (this.file.exists()) {
+            if (this.file.delete()) {
+                try {
+                    output.writeUTF("200");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            } else {
+                try {
+                    output.writeUTF("404");
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private void readIndexMap() {
+        File file = new File(pathToMap);
+        if (file.exists()) {
+            try {
+                FileInputStream fis = new FileInputStream(file);
+                BufferedInputStream bis = new BufferedInputStream(fis);
+                ObjectInputStream ois = new ObjectInputStream(bis);
+                this.indexesMap = (ConcurrentMap<Integer, String>) ois.readObject();
+                ois.close();
+
+            } catch (IOException | ClassNotFoundException fileNotFoundException) {
+                fileNotFoundException.printStackTrace();
+            }
+        } else {
+            this.indexesMap = new ConcurrentHashMap<>();
+        }
+    }
+
+    private void saveIndexMap() {
+        try {
+            File file = new File(pathToMap);
+            FileOutputStream fos = new FileOutputStream(file);
+            BufferedOutputStream bos = new BufferedOutputStream(fos);
+            ObjectOutputStream oos = new ObjectOutputStream(bos);
+            oos.writeObject(indexesMap);
+            oos.close();
+        } catch (IOException fileNotFoundException) {
+            fileNotFoundException.printStackTrace();
         }
     }
 }
+
+

@@ -11,8 +11,7 @@ import java.util.Objects;
 
 public class Server {
     private final int PORT;
-    private Controller controller = new Controller();
-
+    private final Controller controller = new Controller();
 
     public Server(int port) {
         this.PORT = port;
@@ -28,13 +27,14 @@ public class Server {
                         DataOutputStream output = new DataOutputStream(serverSocket.getOutputStream())
                 ) {
                     String requestString = inputStream.readUTF();
+                    System.out.println(requestString);
                     Request request = parseRequest(requestString);
                     if (Objects.isNull(request)) {
                         serverSocket.close();
                         break;
                     } else {
                         controller.setRequest(request);
-                        output.writeUTF(controller.executeRequest());
+                        controller.executeRequest(inputStream, output);
                     }
                 }
             }
@@ -44,14 +44,15 @@ public class Server {
     }
 
     private Request parseRequest(String requestString) {
-        String[] requestParsed = requestString.split("\\s+", 3);
-        switch (requestParsed[0]) {
+        String type = requestString.split("\\s+", 2)[0];
+        User user = new User(requestString);
+        switch (type) {
             case "get":
-                return new GetRequest(new User(requestParsed[1]));
-            case "create":
-                return new CreateFileRequest(new User(requestParsed[1], requestParsed[2]));
+                return new GetRequest(user);
+            case "save":
+                return new CreateFileRequest(user);
             case "delete":
-                return new DeleteRequest(new User(requestParsed[1]));
+                return new DeleteRequest(user);
             case "exit":
                 break;
         }
